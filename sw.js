@@ -1,5 +1,5 @@
 // 只快取畫面檔案；API 請求一律走網路，不快取任何紀錄資料
-const CACHE = 'poc-shell-v1';
+const CACHE = 'poc-shell-v2';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icon-192.png'];
 
 self.addEventListener('install', e => {
