@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>諮商紀錄</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f6f5e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="諮商紀錄">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>諮商紀錄</h1>
+    <div id="who"></div>
+  </header>
+
+  <main>
+    <section id="login-view" class="card">
+      <p>請用診所登記的 Google 帳號登入。</p>
+      <div id="gsi-button"></div>
+      <p id="login-error" class="error"></p>
+    </section>
+
+    <div id="app-view" class="hidden">
+      <nav class="tabs">
+        <button data-tab="form" class="active">新增紀錄</button>
+        <button data-tab="list">我的紀錄</button>
+      </nav>
+
+      <section id="form-view" class="card">
+        <div class="form-head">
+          <strong id="form-title">新增一筆</strong>
+          <button id="cancel-edit" class="link hidden">取消修改</button>
+        </div>
+
+        <label for="f-date">日期</label>
+        <input type="date" id="f-date">
+
+        <label for="f-client">個案</label>
+        <select id="f-client"></select>
+        <input id="f-new-client" class="hidden" placeholder="輸入新個案代號，例如 C012" maxlength="30" autocomplete="off">
+
+        <label>諮商性質</label>
+        <div id="f-type" class="chips"></div>
+
+        <label for="f-amount">金額 <span id="amount-hint" class="hint"></span></label>
+        <input id="f-amount" type="number" inputmode="numeric" min="0" step="1">
+
+        <label for="f-note">紀錄內容 <span class="hint">選填</span></label>
+        <textarea id="f-note" rows="4"></textarea>
+
+        <label for="f-files">附件 <span class="hint">選填，Word 或照片，最多 3 個</span></label>
+        <div id="existing-files" class="hint"></div>
+        <input type="file" id="f-files" multiple accept="image/*,.doc,.docx,.pdf">
+
+        <p id="form-error" class="error"></p>
+        <div class="actions">
+          <button id="save" class="primary">儲存</button>
+          <button id="void" class="danger hidden">作廢這筆</button>
+        </div>
+      </section>
+
+      <section id="list-view" class="card hidden">
+        <div class="month-bar">
+          <button id="prev-month" class="link" aria-label="上個月">‹</button>
+          <strong id="month-label"></strong>
+          <button id="next-month" class="link" aria-label="下個月">›</button>
+        </div>
+        <p id="month-summary" class="hint"></p>
+        <div id="records"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="status-bar" class="hidden"></div>
+
+  <script src="config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="app.js"></script>
+</body>
+</html>
