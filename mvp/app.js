@@ -10,6 +10,7 @@ const state = {
   records: [],        // 伺服器確認過的紀錄
   maxAttachments: 3,
   editingId: null,
+  editingQueued: null, // 正在修改的「上傳失敗」項目：送出時取代它
   month: currentMonth(),
 };
 // 待送出的動作：{ action: 'save'|'void', payload, status: 'waiting'|'sending'|'failed', error }
@@ -114,6 +115,7 @@ async function bootstrap() {
 
 function resetForm() {
   state.editingId = null;
+  state.editingQueued = null;
   $('form-title').textContent = '新增一筆';
   $('cancel-edit').classList.add('hidden');
   $('void').classList.add('hidden');
@@ -176,7 +178,8 @@ function editRecord(id) {
   const r = allRecords().find(x => x.record_id === id);
   if (!r) return;
   if (r.voided) return setStatus('這筆已作廢，不能修改', 'warn');
-  if (queue.some(q => q.payload.record_id === id)) return setStatus('這筆還在上傳中，請稍候', 'warn');
+  const pending = queue.find(q => q.payload.record_id === id);
+  if (pending) return pending.status === 'failed' ? editFailed(pending) : setStatus('這筆還在上傳中，請稍候', 'warn');
 
   state.editingId = id;
   $('form-title').textContent = '修改紀錄';
@@ -193,6 +196,32 @@ function editRecord(id) {
     ? `目前附件：${r.attachments.join('、')}（選新檔案會整組取代）` : '';
   $('void').classList.toggle('hidden', r.reconciled);
   $('form-error').textContent = '';
+  resetVoidButton();
+  switchTab('form');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 上傳失敗的那筆：把送出的內容（含附件）帶回表單，改完再送
+function editFailed(q) {
+  if (q.action !== 'save') return retry(q.payload.record_id);
+  const p = q.payload;
+  const base = state.records.find(r => r.record_id === p.record_id);
+  state.editingId = p.record_id;
+  state.editingQueued = q;
+  $('form-title').textContent = '修改後重新送出';
+  $('cancel-edit').classList.remove('hidden');
+  $('f-date').value = p.date;
+  renderClientSelect(p.client);
+  renderTypeChips(p.type);
+  $('f-amount').value = p.amount;
+  $('f-amount').disabled = !!(base && base.reconciled);
+  $('amount-hint').textContent = '';
+  $('f-note').value = p.note;
+  $('f-files').value = '';
+  $('existing-files').textContent = p.attachments
+    ? `待送出的附件：${p.attachments.map(a => a.name).join('、')}（沒選新檔案就沿用）` : '';
+  $('void').classList.add('hidden');
+  $('form-error').textContent = '上次失敗原因：' + q.error;
   resetVoidButton();
   switchTab('form');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -233,9 +262,15 @@ async function save() {
   }
   $('save').disabled = false;
 
-  if (!state.clients.includes(client) && !state.editingId) state.clients.push(client);
+  const replacing = state.editingQueued;
+  if (replacing) {
+    if (!payload.attachments && replacing.payload.attachments) payload.attachments = replacing.payload.attachments;
+    queue.splice(queue.indexOf(replacing), 1);
+  }
+  const isNewClient = !state.clients.includes(client) && (!state.editingId || replacing);
+  if (isNewClient) state.clients.push(client);
   const wasEditing = !!state.editingId;
-  enqueue('save', payload);
+  enqueue('save', payload, isNewClient ? client : null);
   resetForm();
   if (wasEditing) switchTab('list');
 }
@@ -265,8 +300,8 @@ function resetVoidButton() {
 // 上傳佇列：按下儲存立刻可以填下一筆，背景依序送出
 // =====================================================================
 
-function enqueue(action, payload) {
-  queue.push({ action, payload, status: 'waiting' });
+function enqueue(action, payload, newClient) {
+  queue.push({ action, payload, status: 'waiting', newClient });
   renderList();
   renderStatus();
   drain();
@@ -288,6 +323,8 @@ async function drain() {
       q.status = 'failed';
       q.error = err.message;
       q.auth = err.auth;
+      // 新個案沒建成功（例如代號被別人用了），從選單拿掉
+      if (q.newClient && !err.auth) state.clients = state.clients.filter(c => c !== q.newClient);
       if (err.auth) showLogin('登入已過期，重新登入後會自動送出未完成的紀錄');
     }
     renderList();
@@ -345,11 +382,12 @@ function renderList() {
       r.attachments.length ? `<span class="badge grey">📎${r.attachments.length}</span>` : '',
     ].join('');
     const failedActions = q && q.status === 'failed'
-      ? `<div class="sub error">${esc(q.error)}</div>
-         <div><button class="link" onclick="event.stopPropagation();retry('${r.record_id}')">重試</button>
+      ? `<div class="fail-reason">⚠ ${esc(q.error)}</div>
+         <div class="fail-actions">${q.action === 'save' ? `<button class="link" onclick="event.stopPropagation();editRecord('${r.record_id}')">修改</button>` : ''}
+         <button class="link" onclick="event.stopPropagation();retry('${r.record_id}')">重試</button>
          <button class="link" onclick="event.stopPropagation();discard('${r.record_id}')">放棄</button></div>` : '';
     return `
-      <div class="rec ${r.voided ? 'voided' : ''}" onclick="editRecord('${r.record_id}')">
+      <div class="rec ${r.voided ? 'voided' : ''} ${q && q.status === 'failed' ? 'failed' : ''}" onclick="editRecord('${r.record_id}')">
         <div>
           <div class="main">${esc(r.date.slice(5))}　${esc(r.client)}　${esc(r.type)}${badges}</div>
           ${r.note ? `<div class="sub">${esc(r.note.slice(0, 30))}${r.note.length > 30 ? '…' : ''}</div>` : ''}
@@ -375,7 +413,7 @@ function renderStatus() {
   const active = queue.filter(q => q.status !== 'failed').length;
   const failed = queue.length - active;
   if (active) return setStatus(`上傳中 ${active} 筆，請勿關閉頁面`, 'warn');
-  if (failed) return setStatus(`${failed} 筆上傳失敗，請到「我的紀錄」重試`, 'err');
+  if (failed) return setStatus(`${failed} 筆上傳失敗，點這裡查看`, 'err');
   setStatus('全部已儲存 ✓', 'ok', 2500);
 }
 
@@ -446,6 +484,7 @@ $('save').addEventListener('click', save);
 $('void').addEventListener('click', onVoidClick);
 $('cancel-edit').addEventListener('click', () => { resetForm(); switchTab('list'); });
 $('prev-month').addEventListener('click', () => shiftMonth(-1));
+$('status-bar').addEventListener('click', () => { if ($('status-bar').classList.contains('err')) { switchTab('list'); window.scrollTo(0, 0); } });
 $('next-month').addEventListener('click', () => shiftMonth(1));
 // 還有未送出的紀錄時，關閉頁面前提醒（桌機與 Android 有效；iPhone 不保證）
 window.addEventListener('beforeunload', e => { if (queue.length) { e.preventDefault(); e.returnValue = ''; } });
