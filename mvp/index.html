@@ -18,10 +18,15 @@
   </header>
 
   <main>
-    <section id="login-view" class="card">
-      <p>請用診所登記的 Google 帳號登入。</p>
-      <div id="gsi-button"></div>
+    <section id="loading-view" class="card">
+      <p id="loading-text" class="loading">載入中，約需 5～10 秒，請稍候……</p>
+    </section>
+
+    <section id="login-view" class="card hidden">
+      <p id="login-hint"></p>
       <p id="login-error" class="error"></p>
+      <p id="login-detail" class="hint"></p>
+      <div id="gsi-button"></div>
     </section>
 
     <div id="app-view" class="hidden">
